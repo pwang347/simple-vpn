@@ -57,6 +57,7 @@ func recvLoop() {
 		reader  *bufio.Reader
 	)
 	for {
+		time.Sleep(1000 * time.Millisecond)
 		if conn == nil {
 			continue
 		}
@@ -69,7 +70,6 @@ func recvLoop() {
 			continue
 		}
 		outputArea.SetText(outputArea.Text + "\n" + message)
-		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
