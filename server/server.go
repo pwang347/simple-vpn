@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/widget"
+	"fyne.io/fyne/layout"
 	"github.com/Gordon-Yeh/simple-vpn/remote"
 )
 
@@ -19,9 +20,11 @@ var (
 	conn        net.Conn
 	statusLabel *widget.Label
 	portField   *widget.Entry
+	secretField *widget.Entry
 	inputArea   *widget.Entry
 	inputBtn    *widget.Button
 	outputArea  *widget.Entry
+	continueBtn *widget.Button
 )
 
 func handleServe() {
@@ -78,6 +81,9 @@ func Start(w fyne.Window, app fyne.App) {
 	portField = widget.NewEntry()
 	portField.SetText(defaultPort)
 
+	secretField = widget.NewEntry()
+	secretField.SetPlaceHolder("shared secret")
+
 	inputArea = widget.NewMultiLineEntry()
 	inputArea.SetReadOnly(true)
 	inputBtn = widget.NewButton("Send Message", handleSend)
@@ -85,15 +91,27 @@ func Start(w fyne.Window, app fyne.App) {
 
 	outputArea = widget.NewMultiLineEntry()
 	outputArea.SetReadOnly(true)
+	continueBtn = widget.NewButton("Continue", func(){fmt.Println("step")})
+
+	form := widget.NewForm()
+	form.Append("Port", portField)
+	form.Append("Secret", secretField)
 
 	clientLayout := widget.NewVBox(
-		widget.NewForm(
-			&widget.FormItem{Text: "Port", Widget: portField}),
-		widget.NewButton("Serve", handleServe),
+		form,
+		widget.NewHBox(layout.NewSpacer(), 
+			widget.NewButton("Serve", handleServe),
+		),
+
+		widget.NewLabel("Message"),
 		inputArea,
-		inputBtn,
+		widget.NewHBox(layout.NewSpacer(), inputBtn),
+
 		widget.NewLabel("Received messages"),
 		outputArea,
+		widget.NewHBox(layout.NewSpacer(), continueBtn),
+
+		widget.NewLabel("Status"),
 		statusLabel,
 	)
 
