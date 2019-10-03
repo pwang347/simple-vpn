@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"time"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/widget"
@@ -61,9 +62,10 @@ func recvLoop() {
 		// TODO: we probably don't want to delimit on newlines
 		if message, err = reader.ReadString('\n'); err != nil {
 			statusLabel.SetText(err.Error())
-			return
+			continue
 		}
 		outputArea.SetText(outputArea.Text + "\n" + message)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
