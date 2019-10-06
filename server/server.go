@@ -41,6 +41,7 @@ func handleServe() {
 	}
 	statusLabel.SetText("Successfully connected to client")
 	inputArea.SetReadOnly(false)
+	inputArea.SetPlaceHolder("")
 	inputBtn.Enable()
 }
 
@@ -73,6 +74,10 @@ func recvLoop() {
 	}
 }
 
+func NewBoldedLabel(text string) *widget.Label {
+	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+}
+
 // Start initializes the client application
 func Start(w fyne.Window, app fyne.App) {
 
@@ -82,11 +87,12 @@ func Start(w fyne.Window, app fyne.App) {
 	portField.SetText(defaultPort)
 
 	secretField = widget.NewEntry()
-	secretField.SetPlaceHolder("shared secret")
+	secretField.SetPlaceHolder("Shared Secret Value")
 
 	inputArea = widget.NewMultiLineEntry()
 	inputArea.SetReadOnly(true)
-	inputBtn = widget.NewButton("Send Message", handleSend)
+	inputArea.SetPlaceHolder("Connection must be established first")
+	inputBtn = widget.NewButton("Send", handleSend)
 	inputBtn.Disable()
 
 	outputArea = widget.NewMultiLineEntry()
@@ -103,15 +109,15 @@ func Start(w fyne.Window, app fyne.App) {
 			widget.NewButton("Serve", handleServe),
 		),
 
-		widget.NewLabel("Message"),
+		NewBoldedLabel("Data to be Sent"),
 		inputArea,
 		widget.NewHBox(layout.NewSpacer(), inputBtn),
 
-		widget.NewLabel("Received messages"),
+		NewBoldedLabel("Data as Received"),
 		outputArea,
 		widget.NewHBox(layout.NewSpacer(), continueBtn),
 
-		widget.NewLabel("Status"),
+		NewBoldedLabel("Status"),
 		statusLabel,
 	)
 
