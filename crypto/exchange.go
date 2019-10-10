@@ -1,32 +1,66 @@
 package crypto
 
 import (
+	"encoding/binary"
 	"math"
 	"math/rand"
-	"time"
 )
 
 // TODO: handle key exchange here
 const (
-	g int = 6
-	p int = 17
+	// TODO: make these more interesting
+	g                       uint64 = 6
+	p                       uint64 = 17
+	DefaultNonceLength             = 512
+	DefaultPartialKeyLength        = 8
 )
 
-func NewChallenge() int {
-	// FIXME: not cryptographically secure
-	var s = rand.NewSource(time.Now().UnixNano())
-	var r = rand.New(s)
-	return r.Int()
+// AuthenticationPayloadBeginAB is the message format for the first step of authentication
+type AuthenticationPayloadBeginAB struct {
+	ChallengeAB [DefaultNonceLength]byte
 }
 
-func pow(x int, y int) int {
-	return int(math.Pow(float64(x), float64(y)))
+// AuthenticationPayloadResponseBA is the message format for the second step of authentication
+type AuthenticationPayloadResponseBA struct {
+	ChallengeBA               [DefaultNonceLength]byte
+	EncChallengeABPartialkeyB []byte
 }
 
-func GeneratePartialKey(exponent int) int {
+// AuthenticationPayloadResponseAB is the message format for the third step of authentication
+type AuthenticationPayloadResponseAB struct {
+	EncChallengeBAPartialKeyA []byte
+}
+
+// DecodedChallengePartialKey is the decoded challenge key appended to the partial key
+type DecodedChallengePartialKey struct {
+	Challenge  [DefaultNonceLength]byte
+	PartialKey [DefaultPartialKeyLength]byte
+}
+
+// NewChallenge generates a new challenge of size bytes
+func NewChallenge(size int) []byte {
+	token := make([]byte, size)
+	rand.Read(token)
+	return token
+}
+
+// GenerateRandomExponent generates a random exponent
+func GenerateRandomExponent() uint64 {
+	buf := make([]byte, 8)
+	rand.Read(buf) // Always succeeds, no need to check error
+	return binary.LittleEndian.Uint64(buf)
+}
+
+func pow(x uint64, y uint64) uint64 {
+	return uint64(math.Pow(float64(x), float64(y)))
+}
+
+// GeneratePartialKey generates a partial key
+func GeneratePartialKey(exponent uint64) uint64 {
 	return pow(g, exponent) % p
 }
 
-func GenerateKey(partialKey int, knownExp int) int {
+// ConstructKey constructs a shared key using the partial key and known exponent
+func ConstructKey(partialKey uint64, knownExp uint64) uint64 {
 	return pow(partialKey, knownExp) % p
 }

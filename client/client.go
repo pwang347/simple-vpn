@@ -2,10 +2,12 @@ package client
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"fyne.io/fyne"
@@ -13,26 +15,22 @@ import (
 	"fyne.io/fyne/widget"
 	"github.com/Gordon-Yeh/simple-vpn/crypto"
 	"github.com/Gordon-Yeh/simple-vpn/remote"
-)
-
-const (
-	defaultIPAddress = "127.0.0.1"
-	defaultPort      = "8080"
-	a                = 10
+	"github.com/Gordon-Yeh/simple-vpn/ui"
 )
 
 var (
-	conn           net.Conn
-	statusLabel    *widget.Label
-	ipAddressField *widget.Entry
-	portField      *widget.Entry
-	secretField    *widget.Entry
-	inputArea      *widget.Entry
-	inputBtn       *widget.Button
-	outputArea     *widget.Entry
-	continueBtn    *widget.Button
-	isConnected    bool = false
-	nonce          int
+	conn              net.Conn
+	statusLabel       *widget.Label
+	ipAddressField    *widget.Entry
+	portField         *widget.Entry
+	secretField       *widget.Entry
+	inputArea         *widget.Entry
+	inputBtn          *widget.Button
+	outputArea        *widget.Entry
+	continueBtn       *widget.Button
+	nonce             int
+	sharedSecretValue string
+	sessionKey        string
 )
 
 func handleConnect() {
@@ -40,78 +38,133 @@ func handleConnect() {
 
 	// TODO: form validation
 	if conn, err = remote.Connect(ipAddressField.Text, portField.Text); err != nil {
-		statusLabel.SetText(err.Error())
+		ui.DisplayError(err)
 		return
 	}
-	statusLabel.SetText(fmt.Sprintf("Successfully connected to server at %s:%s", ipAddressField.Text, portField.Text))
+	ui.DisplayMessage(fmt.Sprintf("Successfully connected to server at %s:%s", ipAddressField.Text, portField.Text))
+	if err = authenticate(); err != nil {
+		ui.DisplayError(err)
+		return
+	}
+	ui.DisplayMessage(fmt.Sprintf("Authenticated with server at %s:%s", ipAddressField.Text, portField.Text))
 	inputArea.SetReadOnly(false)
 	inputArea.SetPlaceHolder("")
 	inputBtn.Enable()
-	isConnected = true
 
-	authenticate()
+	go recvLoop()
 }
 
-func authenticate() {
+func authenticate() (err error) {
+
 	fmt.Println("Client authentication")
-	var (
-		err       error
-		message   string
-		reader    *bufio.Reader = bufio.NewReader(conn)
-		challenge int
-	)
+	ui.DisplayMessage("Performing mutual authentication")
+
 	// Msg1: R_A -->
-	nonce = crypto.NewChallenge()
-	fmt.Println("send (R_A): " + strconv.Itoa(nonce))
-	conn.Write([]byte(strconv.Itoa(nonce) + "\n"))
+	nonceAB := crypto.NewChallenge(crypto.DefaultNonceLength)
+	msg1 := crypto.AuthenticationPayloadBeginAB{}
+	copy(msg1.ChallengeAB[:], nonceAB[0:crypto.DefaultNonceLength])
+	fmt.Println("send (R_A): " + string(nonceAB))
+
+	ui.DisplayMessage("Waiting for read from server [1]...")
+	if err = remote.WriteMessageStruct(conn, msg1); err != nil {
+		return
+	}
 
 	// Msg2: <-- R_B, length of encryption
 	//       <-- Encrypt(R_A, g^b%p, SHARED_SECRET_VALUE)
-	if message, err = reader.ReadString('\n'); err != nil {
-		statusLabel.SetText(err.Error())
-	}
-	message = message[:len(message)-1]
-	fields := strings.SplitN(message, " ", 2)
-	challenge, err = strconv.Atoi(fields[0])
-	fmt.Println("received (R_B): " + fields[0])
-	encryptedLen, err := strconv.Atoi(fields[1])
-	encryptedBuf := make([]byte, encryptedLen)
-	reader.Read(encryptedBuf)
+	var (
+		decodedMsg interface{}
+		msg2       crypto.AuthenticationPayloadResponseBA
+		ok         bool
+		nonceBA    [crypto.DefaultNonceLength]byte
+		encrypted  []byte
+		decrypted  []byte
+	)
 
-	decrypted := crypto.Decrypt(encryptedBuf, []byte(secretField.Text))
-	decryptedParts := strings.SplitN(string(decrypted), " ", 2)
-	fmt.Println(decryptedParts)
-	retNonce, err := strconv.Atoi(decryptedParts[0])
-	theirKey, err := strconv.Atoi(decryptedParts[1])
-	if retNonce != nonce {
-		fmt.Println("Client challenge failed")
+	ui.DisplayMessage("Waiting for response from server...")
+	if decodedMsg, err = remote.ReadMessageStruct(conn); err != nil {
+		return
 	}
-	fmt.Println("Server's partial key:" + decryptedParts[1])
+
+	if msg2, ok = decodedMsg.(crypto.AuthenticationPayloadResponseBA); !ok {
+		err = errors.New("Cast for received message failed [2]")
+		return
+	}
+
+	fmt.Println("received (R_B): " + string(msg2.ChallengeBA[:]))
+
+	nonceBA = msg2.ChallengeBA
+	if decrypted, err = crypto.DecryptBytes(msg2.EncChallengeABPartialkeyB[:], sharedSecretValue); err != nil {
+		return
+	}
+
+	decryptedMsg := crypto.DecodedChallengePartialKey{}
+	if err = binary.Read(bytes.NewReader(decrypted), binary.BigEndian, &decryptedMsg); err != nil {
+		return
+	}
+
+	if !bytes.Equal(decryptedMsg.Challenge[:], nonceAB) {
+		err = errors.New("Server failed challenge")
+		return
+	}
+
+	var partialKeyB uint64 = binary.LittleEndian.Uint64(decryptedMsg.PartialKey[:])
+	fmt.Printf("Server's partial key: %d\n", partialKeyB)
 
 	// Msg3: Encrypt(R_B, g^a%p, SHARED_SECRET_VALUE) -->
-	partialKey := crypto.GeneratePartialKey(a)
-	fmt.Println("Partial key: " + strconv.Itoa(partialKey))
-	encrypted := crypto.Encrypt(challenge, partialKey, secretField.Text)
-	conn.Write([]byte(strconv.Itoa(len(encrypted)) + "\n"))
-	conn.Write(encrypted)
+	a := crypto.GenerateRandomExponent()
+	fmt.Printf("Selected exponent: %d\n", a)
 
-	key := crypto.GenerateKey(theirKey, a)
-	fmt.Println("Established Session key: " + strconv.Itoa(key))
+	partialKeyA := crypto.GeneratePartialKey(a)
+	fmt.Printf("Generated partial key: %d\n", partialKeyA)
+	partialKeyABytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(partialKeyABytes, partialKeyA)
+	if encrypted, err = crypto.EncryptBytes(append(nonceBA[:], partialKeyABytes[:]...), sharedSecretValue); err != nil {
+		return
+	}
+
+	msg3 := crypto.AuthenticationPayloadResponseAB{EncChallengeBAPartialKeyA: encrypted}
+
+	ui.DisplayMessage("Waiting for read from server [2]...")
+	if err = remote.WriteMessageStruct(conn, msg3); err != nil {
+		return
+	}
+
+	key := crypto.ConstructKey(partialKeyB, a)
+	sessionKey = strconv.FormatUint(key, 10)
+	fmt.Println("Established Session key: " + sessionKey)
+	return
+}
+
+func handleDisconnect() {
+	if err := conn.Close(); err != nil {
+		ui.DisplayError(err)
+	}
 }
 
 func handleSend() {
-	// TODO: make sure connection still alive
-	conn.Write([]byte(inputArea.Text + "\n"))
+	var (
+		err       error
+		encrypted []byte
+	)
+	if encrypted, err = crypto.EncryptMessage(inputArea.Text, sessionKey); err != nil {
+		ui.DisplayError(err)
+		return
+	}
+	encrypted = append(encrypted, []byte("\n")...)
+	fmt.Printf("Sending encrypted text: %s\n", encrypted)
+	if _, err := conn.Write(encrypted); err != nil {
+		ui.DisplayError(err)
+	}
 }
 
 func recvLoop() {
-
 	var (
-		err     error
-		message string
-		reader  *bufio.Reader
+		err       error
+		encrypted []byte
+		message   string
+		reader    *bufio.Reader
 	)
-
 	for {
 		time.Sleep(1000 * time.Millisecond)
 		if conn == nil {
@@ -121,40 +174,38 @@ func recvLoop() {
 			continue
 		}
 		// TODO: we probably don't want to delimit on newlines
-		if message, err = reader.ReadString('\n'); err != nil {
-			statusLabel.SetText(err.Error())
+		if encrypted, err = reader.ReadBytes('\n'); err != nil {
+			ui.DisplayError(err)
+			continue
+		}
+		fmt.Printf("Received encrypted text: %s\n", encrypted)
+		encrypted = encrypted[:len(encrypted)-1]
+		if message, err = crypto.DecryptMessage(encrypted, sessionKey); err != nil {
+			ui.DisplayError(err)
 			continue
 		}
 		outputArea.SetText(outputArea.Text + "\n" + message)
 	}
 }
 
-func NewBoldedLabel(text string) *widget.Label {
-	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-}
-
 // Start initializes the client application
 func Start(w fyne.Window, app fyne.App) {
 
 	statusLabel = widget.NewLabel("")
+	ui.SetStatusLabel(statusLabel)
 
-	ipAddressField = widget.NewEntry()
-	ipAddressField.SetText(defaultIPAddress)
+	ipAddressField = ui.NewEntry(remote.DefaultIPAddress, "", false)
+	portField = ui.NewEntry(remote.DefaultPort, "", false)
 
-	portField = widget.NewEntry()
-	portField.SetText(defaultPort)
+	secretField = ui.NewEntry("", "Shared Secret Value", false)
+	secretField.OnChanged = func(newStr string) {
+		sharedSecretValue = newStr
+	}
 
-	secretField = widget.NewEntry()
-	secretField.SetPlaceHolder("Shared Secret Value")
+	inputArea = ui.NewMultiLineEntry("", "Connection must be established first", true)
+	inputBtn = ui.NewButton("Send", handleSend, true)
 
-	inputArea = widget.NewMultiLineEntry()
-	inputArea.SetReadOnly(true)
-	inputArea.SetPlaceHolder("Connection must be established first")
-	inputBtn = widget.NewButton("Send", handleSend)
-	inputBtn.Disable()
-
-	outputArea = widget.NewMultiLineEntry()
-	outputArea.SetReadOnly(true)
+	outputArea = ui.NewMultiLineEntry("", "", true)
 	continueBtn = widget.NewButton("Continue", func() {
 		fmt.Println("step")
 	})
@@ -168,22 +219,20 @@ func Start(w fyne.Window, app fyne.App) {
 		form,
 		widget.NewHBox(layout.NewSpacer(),
 			widget.NewButton("Connect", handleConnect),
+			ui.NewButton("Disconnect", handleDisconnect, true),
 		),
 
-		NewBoldedLabel("Data to be Sent"),
+		ui.NewBoldedLabel("Data to be Sent"),
 		inputArea,
 		widget.NewHBox(layout.NewSpacer(), inputBtn),
 
-		NewBoldedLabel("Data as Received"),
+		ui.NewBoldedLabel("Data as Received"),
 		outputArea,
 
-		NewBoldedLabel("Status"),
+		ui.NewBoldedLabel("Status"),
 		statusLabel,
 		widget.NewHBox(layout.NewSpacer(), continueBtn),
 	)
 
 	w.SetContent(clientLayout)
-
-	// run a receiver loop in parallel
-	// go recvLoop()
 }
