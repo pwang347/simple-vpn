@@ -22,8 +22,8 @@ type AuthenticationPayloadBeginAB struct {
 
 // AuthenticationPayloadResponseBA is the message format for the second step of authentication
 type AuthenticationPayloadResponseBA struct {
-	ChallengeBA               [DefaultNonceLength]byte
-	EncChallengeABPartialkeyB []byte
+	ChallengeBA                   [DefaultNonceLength]byte
+	EncSrvrChallengeABPartialkeyB []byte
 }
 
 // AuthenticationPayloadResponseAB is the message format for the third step of authentication
@@ -33,6 +33,13 @@ type AuthenticationPayloadResponseAB struct {
 
 // DecodedChallengePartialKey is the decoded challenge key appended to the partial key
 type DecodedChallengePartialKey struct {
+	Challenge  [DefaultNonceLength]byte
+	PartialKey [DefaultPartialKeyLength]byte
+}
+
+// DecodedSrvrChallengePartialKey is the decoded literal SRVR, appended to the challenge key and the partial key
+type DecodedSrvrChallengePartialKey struct {
+	SRVR       [4]byte
 	Challenge  [DefaultNonceLength]byte
 	PartialKey [DefaultPartialKeyLength]byte
 }

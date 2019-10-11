@@ -1,31 +1,9 @@
 package ui
 
 import (
-	"time"
-
 	"fyne.io/fyne"
 	"fyne.io/fyne/widget"
 )
-
-var (
-	statusLabel *widget.Label
-	doResume    = false
-)
-
-// DisplayError displays the error on the status label
-func DisplayError(err error) {
-	statusLabel.SetText(err.Error())
-}
-
-// DisplayMessage displays the error on the status label
-func DisplayMessage(str string) {
-	statusLabel.SetText(str)
-}
-
-// SetStatusLabel sets the status label
-func SetStatusLabel(label *widget.Label) {
-	statusLabel = label
-}
 
 // NewBoldedLabel creates a new bolded label
 func NewBoldedLabel(text string) *widget.Label {
@@ -59,16 +37,17 @@ func NewMultiLineEntry(text string, placeholder string, isReadOnly bool) (entry 
 	return
 }
 
-func Pause() {
-	for {
-		if doResume {
-			doResume = false
-			return
-		}
-		time.Sleep(1000 * time.Millisecond)
-	}
+// NewCheck creates a new check
+func NewCheck(text string, handler func(bool), isChecked bool) (check *widget.Check) {
+	check = widget.NewCheck(text, func(bool) {})
+	check.SetChecked(isChecked)
+	check.OnChanged = handler
+	return
 }
 
-func Resume() {
-	doResume = true
+// NewIcon creates a new icon
+func NewIcon(res fyne.Resource, size fyne.Size) (icon *widget.Icon) {
+	icon = widget.NewIcon(res)
+	icon.Resize(size)
+	return
 }
