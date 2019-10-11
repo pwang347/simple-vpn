@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"time"
+
 	"fyne.io/fyne"
 	"fyne.io/fyne/widget"
 )
 
 var (
 	statusLabel *widget.Label
+	doResume    = false
 )
 
 // DisplayError displays the error on the status label
@@ -54,4 +57,18 @@ func NewMultiLineEntry(text string, placeholder string, isReadOnly bool) (entry 
 	entry.SetPlaceHolder(placeholder)
 	entry.SetReadOnly(isReadOnly)
 	return
+}
+
+func Pause() {
+	for {
+		if doResume {
+			doResume = false
+			return
+		}
+		time.Sleep(1000 * time.Millisecond)
+	}
+}
+
+func Resume() {
+	doResume = true
 }

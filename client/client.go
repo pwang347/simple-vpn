@@ -24,6 +24,8 @@ var (
 	ipAddressField    *widget.Entry
 	portField         *widget.Entry
 	secretField       *widget.Entry
+	connectBtn        *widget.Button
+	disconnectBtn     *widget.Button
 	inputArea         *widget.Entry
 	inputBtn          *widget.Button
 	outputArea        *widget.Entry
@@ -31,6 +33,7 @@ var (
 	nonce             int
 	sharedSecretValue string
 	sessionKey        string
+	isConnected       bool
 )
 
 func handleConnect() {
@@ -41,23 +44,27 @@ func handleConnect() {
 		ui.DisplayError(err)
 		return
 	}
-	ui.DisplayMessage(fmt.Sprintf("Successfully connected to server at %s:%s", ipAddressField.Text, portField.Text))
+	ui.DisplayMessage(fmt.Sprintf("Established connection to server at %s:%s", ipAddressField.Text, portField.Text))
+
 	if err = authenticate(); err != nil {
 		ui.DisplayError(err)
 		return
 	}
-	ui.DisplayMessage(fmt.Sprintf("Authenticated with server at %s:%s", ipAddressField.Text, portField.Text))
+	ui.DisplayMessage(fmt.Sprintf("Successfully authenticated with server at %s:%s", ipAddressField.Text, portField.Text))
+
 	inputArea.SetReadOnly(false)
 	inputArea.SetPlaceHolder("")
 	inputBtn.Enable()
+	disconnectBtn.Enable()
+	isConnected = true
 
 	go recvLoop()
 }
 
 func authenticate() (err error) {
-
 	fmt.Println("Client authentication")
-	ui.DisplayMessage("Performing mutual authentication")
+	ui.DisplayMessage("Starting mutual authentication [Continue]")
+	ui.Pause()
 
 	// Msg1: R_A -->
 	nonceAB := crypto.NewChallenge(crypto.DefaultNonceLength)
@@ -65,10 +72,12 @@ func authenticate() (err error) {
 	copy(msg1.ChallengeAB[:], nonceAB[0:crypto.DefaultNonceLength])
 	fmt.Println("send (R_A): " + string(nonceAB))
 
-	ui.DisplayMessage("Waiting for read from server [1]...")
+	ui.DisplayMessage("Sending: <Msg1> [Continue]")
+	ui.Pause()
 	if err = remote.WriteMessageStruct(conn, msg1); err != nil {
 		return
 	}
+	ui.DisplayMessage("Waiting for read from server [1]...")
 
 	// Msg2: <-- R_B, length of encryption
 	//       <-- Encrypt(R_A, g^b%p, SHARED_SECRET_VALUE)
@@ -92,6 +101,8 @@ func authenticate() (err error) {
 	}
 
 	fmt.Println("received (R_B): " + string(msg2.ChallengeBA[:]))
+	ui.DisplayMessage("Received: <Msg2> [Continue]")
+	ui.Pause()
 
 	nonceBA = msg2.ChallengeBA
 	if decrypted, err = crypto.DecryptBytes(msg2.EncChallengeABPartialkeyB[:], sharedSecretValue); err != nil {
@@ -125,14 +136,18 @@ func authenticate() (err error) {
 
 	msg3 := crypto.AuthenticationPayloadResponseAB{EncChallengeBAPartialKeyA: encrypted}
 
-	ui.DisplayMessage("Waiting for read from server [2]...")
+	ui.DisplayMessage("Sending: <Msg3> [Continue]")
+	ui.Pause()
 	if err = remote.WriteMessageStruct(conn, msg3); err != nil {
 		return
 	}
+	ui.DisplayMessage("Waiting for read from server [2]...")
 
 	key := crypto.ConstructKey(partialKeyB, a)
 	sessionKey = strconv.FormatUint(key, 10)
 	fmt.Println("Established Session key: " + sessionKey)
+	ui.DisplayMessage("Established Session key: " + sessionKey + " [Continue]")
+	ui.Pause()
 	return
 }
 
@@ -140,6 +155,10 @@ func handleDisconnect() {
 	if err := conn.Close(); err != nil {
 		ui.DisplayError(err)
 	}
+	ui.DisplayMessage("Disconnected")
+	isConnected = false
+	// connectBtn.Enable()
+	disconnectBtn.Disable()
 }
 
 func handleSend() {
@@ -167,6 +186,10 @@ func recvLoop() {
 	)
 	for {
 		time.Sleep(1000 * time.Millisecond)
+		if !isConnected {
+			fmt.Println("Not connected..")
+			return
+		}
 		if conn == nil {
 			continue
 		}
@@ -202,12 +225,16 @@ func Start(w fyne.Window, app fyne.App) {
 		sharedSecretValue = newStr
 	}
 
+	connectBtn = widget.NewButton("Connect", handleConnect)
+	disconnectBtn = ui.NewButton("Disconnect", handleDisconnect, true)
+
 	inputArea = ui.NewMultiLineEntry("", "Connection must be established first", true)
 	inputBtn = ui.NewButton("Send", handleSend, true)
 
 	outputArea = ui.NewMultiLineEntry("", "", true)
 	continueBtn = widget.NewButton("Continue", func() {
-		fmt.Println("step")
+		fmt.Println("Continue")
+		go ui.Resume() // FIXME: question at the server side...
 	})
 
 	form := widget.NewForm()
@@ -217,10 +244,7 @@ func Start(w fyne.Window, app fyne.App) {
 
 	clientLayout := widget.NewVBox(
 		form,
-		widget.NewHBox(layout.NewSpacer(),
-			widget.NewButton("Connect", handleConnect),
-			ui.NewButton("Disconnect", handleDisconnect, true),
-		),
+		widget.NewHBox(layout.NewSpacer(), connectBtn, disconnectBtn),
 
 		ui.NewBoldedLabel("Data to be Sent"),
 		inputArea,
