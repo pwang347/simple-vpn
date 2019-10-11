@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"time"
 
 	"fyne.io/fyne/widget"
@@ -45,16 +44,16 @@ func Step(proc func()) {
 	pause()
 	continueBtn.Disable()
 	proc()
-	continueBtn.Enable()
+	if stepEnabled {
+		continueBtn.Enable()
+	}
 }
 
 // SetStepMode sets the current stepping mode
 func SetStepMode(isStep bool) {
-	fmt.Println(isStep)
 	stepEnabled = isStep
 	if !stepEnabled && isPaused {
 		doResume = true
 	}
-	// TODO
 	continueBtn.Disable()
 }
