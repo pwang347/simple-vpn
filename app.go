@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/widget"
 	"github.com/Gordon-Yeh/simple-vpn/client"
 	"github.com/Gordon-Yeh/simple-vpn/crypto"
+	"github.com/Gordon-Yeh/simple-vpn/icon"
 	"github.com/Gordon-Yeh/simple-vpn/server"
 )
 
@@ -16,6 +17,7 @@ func main() {
 
 	app := app.New()
 	w := app.NewWindow("CPEN 442 | VPN")
+	w.SetIcon(icon.IconBitmap)
 	app.Settings().SetTheme(theme.LightTheme())
 
 	initLayout := fyne.NewContainerWithLayout(layout.NewCenterLayout(),
