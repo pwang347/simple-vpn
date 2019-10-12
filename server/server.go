@@ -38,7 +38,7 @@ var (
 func handleServe() {
 	var err error
 
-	ui.Log("Initialized server on port " + portField.Text + " using secret " + sharedSecretValue)
+	ui.Log("Initialized server on port " + portField.Text)
 	serveBtn.Disable()
 	portField.SetReadOnly(true)
 	secretField.SetReadOnly(true)
@@ -70,7 +70,7 @@ func handleServe() {
 func authenticate() (err error) {
 
 	ui.Step(func() {
-		ui.Log("Starting client authentication")
+		ui.Log("Starting client authentication using secret " + sharedSecretValue)
 	})
 
 	// Msg1: <-- (R_A)
