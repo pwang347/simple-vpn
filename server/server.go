@@ -32,12 +32,12 @@ var (
 	nonce             int
 	sharedSecretValue string
 	sessionKey        string
+	isConnected       = false
 )
 
 func handleServe() {
 	var err error
 
-	ui.DisplayMessageStatus(fmt.Sprintf("Waiting for a connection on port %s...", portField.Text))
 	ui.Log("Initialized server on port " + portField.Text + " using secret " + sharedSecretValue)
 	serveBtn.Disable()
 	portField.SetReadOnly(true)
@@ -50,8 +50,8 @@ func handleServe() {
 		return
 	}
 
+	isConnected = true
 	ui.Log("Accepted connection from " + conn.RemoteAddr().String())
-	ui.DisplayMessageStatus("Established connection to client")
 	disconnectBtn.Enable()
 
 	if err = authenticate(); err != nil {
@@ -59,8 +59,6 @@ func handleServe() {
 		handleDisconnect()
 		return
 	}
-
-	ui.DisplayMessageStatus("Successfully authenticated with client")
 
 	inputArea.SetReadOnly(false)
 	inputArea.SetPlaceHolder("")
@@ -85,7 +83,6 @@ func authenticate() (err error) {
 	)
 
 	if ui.Step(func() {
-		ui.DisplayMessageStatus("Waiting for Msg1 from client...")
 		if decodedMsg, err = remote.ReadMessageStruct(conn); err != nil {
 			return
 		}
@@ -136,7 +133,6 @@ func authenticate() (err error) {
 
 		ui.LogO("Sent R_A (msg2):\n" + fmt.Sprintf("%x", nonceBA[:]))
 		ui.LogO("Sent Encrypt(SRVR, R_A, g^b%p, K_AB)) (msg2):\n" + fmt.Sprintf("%x", msg2.EncSrvrChallengeABPartialkeyB[:]))
-		ui.DisplayMessageStatus("Waiting for client to read Msg2...")
 		if err = remote.WriteMessageStruct(conn, msg2); err != nil {
 			return
 		}
@@ -151,7 +147,6 @@ func authenticate() (err error) {
 	)
 
 	if ui.Step(func() {
-		ui.DisplayMessageStatus("Waiting for Msg3 from client...")
 		if decodedMsg, err = remote.ReadMessageStruct(conn); err != nil {
 			return
 		}
@@ -202,8 +197,10 @@ func handleDisconnect() {
 	if conn != nil {
 		conn.Close()
 	}
-	ui.Log("Disconnected")
-	ui.DisplayMessageStatus("Disconnected")
+	if isConnected {
+		ui.Log("Disconnected")
+		isConnected = false
+	}
 	serveBtn.Enable()
 	portField.SetReadOnly(false)
 	secretField.SetReadOnly(false)
@@ -322,8 +319,6 @@ func Start(w fyne.Window, app fyne.App) {
 			ui.NewBoldedLabel("Data as Received"),
 			outputArea,
 
-			ui.NewBoldedLabel("Status"),
-			ui.NewStatusLabel(),
 			widget.NewHBox(layout.NewSpacer(), ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false), ui.NewStepperButton("Step")),
 		),
 		scrollLayout)

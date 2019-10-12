@@ -32,6 +32,7 @@ var (
 	nonce             int
 	sharedSecretValue string
 	sessionKey        string
+	isConnected       = false
 )
 
 func handleConnect() {
@@ -41,8 +42,7 @@ func handleConnect() {
 	ipAddressField.SetReadOnly(true)
 	portField.SetReadOnly(true)
 	secretField.SetReadOnly(true)
-	ui.Log("Initialized connection to " + ipAddressField.Text + " on port " + portField.Text + " using secret " + sharedSecretValue)
-	ui.DisplayMessageStatus(fmt.Sprintf("Waiting for a connection with %s on port %s...", ipAddressField.Text, portField.Text))
+	ui.Log("Trying to connect to " + ipAddressField.Text + " on port " + portField.Text)
 
 	// TODO: form validation
 	if conn, err = remote.Connect(ipAddressField.Text, portField.Text); err != nil {
@@ -51,8 +51,8 @@ func handleConnect() {
 		return
 	}
 
+	isConnected = true
 	ui.Log("Connection accepted by " + conn.RemoteAddr().String())
-	ui.DisplayMessageStatus("Established connection to server")
 	disconnectBtn.Enable()
 
 	if err = authenticate(); err != nil {
@@ -60,7 +60,6 @@ func handleConnect() {
 		handleDisconnect()
 		return
 	}
-	ui.DisplayMessageStatus("Successfully authenticated with server")
 
 	inputArea.SetReadOnly(false)
 	inputArea.SetPlaceHolder("")
@@ -72,7 +71,7 @@ func handleConnect() {
 func authenticate() (err error) {
 
 	ui.Step(func() {
-		ui.Log("Starting client authentication")
+		ui.Log("Starting client authentication using secret " + sharedSecretValue)
 	})
 
 	// Msg1: (R_A) -->
@@ -89,7 +88,6 @@ func authenticate() (err error) {
 		msg1 := crypto.AuthenticationPayloadBeginAB{}
 		copy(msg1.ChallengeAB[:], nonceAB[:])
 		ui.LogO("Sent R_A (msg1) =\n" + fmt.Sprintf("%x", nonceAB))
-		ui.DisplayMessageStatus("Waiting for server to read Msg1...")
 		err = remote.WriteMessageStruct(conn, msg1)
 	}); err != nil {
 		return
@@ -107,7 +105,6 @@ func authenticate() (err error) {
 	)
 
 	if ui.Step(func() {
-		ui.DisplayMessageStatus("Waiting for Msg2 from server...")
 		if decodedMsg, err = remote.ReadMessageStruct(conn); err != nil {
 			return
 		}
@@ -173,7 +170,6 @@ func authenticate() (err error) {
 		msg3 := crypto.AuthenticationPayloadResponseAB{EncChallengeBAPartialKeyA: encrypted}
 
 		ui.LogO("Sent Encrypt(R_B, g^a%p, K_AB) (msg3):\n" + fmt.Sprintf("%x", msg3.EncChallengeBAPartialKeyA[:]))
-		ui.DisplayMessageStatus("Waiting for server to read Msg3...")
 		if err = remote.WriteMessageStruct(conn, msg3); err != nil {
 			return
 		}
@@ -193,8 +189,10 @@ func handleDisconnect() {
 	if conn != nil {
 		conn.Close()
 	}
-	ui.Log("Disconnected")
-	ui.DisplayMessageStatus("Disconnected")
+	if isConnected {
+		ui.Log("Disconnected")
+		isConnected = false
+	}
 	connectBtn.Enable()
 	ipAddressField.SetReadOnly(false)
 	portField.SetReadOnly(false)
@@ -315,9 +313,6 @@ func Start(w fyne.Window, app fyne.App) {
 
 			ui.NewBoldedLabel("Data as Received"),
 			outputArea,
-
-			ui.NewBoldedLabel("Status"),
-			ui.NewStatusLabel(),
 			widget.NewHBox(layout.NewSpacer(), ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false), ui.NewStepperButton("Step")),
 		),
 		scrollLayout)

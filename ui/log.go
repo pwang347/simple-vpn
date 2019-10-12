@@ -26,7 +26,6 @@ const (
 
 var (
 	content     *widget.Box
-	statusLabel *widget.Label
 	numLogItems = 0
 )
 
@@ -141,28 +140,5 @@ func NewScrollingLogContainer() (scroll *widget.ScrollContainer) {
 	scroll = widget.NewScrollContainer(
 		content,
 	)
-	return
-}
-
-// DisplayErrorStatus displays the error on the status label
-func DisplayErrorStatus(err error) {
-	if statusLabel == nil {
-		return
-	}
-	statusLabel.SetText(err.Error())
-}
-
-// DisplayMessageStatus displays the error on the status label
-func DisplayMessageStatus(str string) {
-	if statusLabel == nil {
-		return
-	}
-	statusLabel.SetText(str)
-}
-
-// NewStatusLabel creates a new status label
-func NewStatusLabel() (label *widget.Label) {
-	label = widget.NewLabel("")
-	statusLabel = label
 	return
 }
