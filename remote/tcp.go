@@ -30,13 +30,11 @@ func ServeAndAccept(port string) (conn net.Conn, err error) {
 	)
 
 	if l, err = net.Listen("tcp", fmt.Sprintf(":%s", port)); err != nil {
-		fmt.Println(err.Error())
 		return
 	}
 
 	// note: this blocks until we get a connection
 	if conn, err = l.Accept(); err != nil {
-		fmt.Println(err.Error())
 		return
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -31,7 +32,6 @@ var (
 	nonce             int
 	sharedSecretValue string
 	sessionKey        string
-	isConnected       bool
 )
 
 func handleConnect() {
@@ -63,7 +63,6 @@ func handleConnect() {
 	inputArea.SetPlaceHolder("")
 	inputBtn.Enable()
 	disconnectBtn.Enable()
-	isConnected = true
 
 	go recvLoop()
 }
@@ -94,7 +93,7 @@ func authenticate() (err error) {
 		return
 	}
 
-	// Msg2: <-- (R_B, Encrypt(SRVR, R_A, g^b%p, SHARED_SECRET_VALUE))
+	// Msg2: <-- (R_B, Encrypt(SRVR, R_A, g^b%p, K_AB))
 	var (
 		decodedMsg   interface{}
 		msg2         crypto.AuthenticationPayloadResponseBA
@@ -115,7 +114,7 @@ func authenticate() (err error) {
 			return
 		}
 		ui.LogI("Received R_B (msg2):\n" + ui.FormatBinary(msg2.ChallengeBA[:]))
-		ui.LogI("Received Encrypt(SRVR, R_A, g^b%p, SHARED_SECRET_VALUE) (msg2):\n" + ui.FormatBinary(msg2.EncSrvrChallengeABPartialkeyB[:]))
+		ui.LogI("Received Encrypt(SRVR, R_A, g^b%p, K_AB) (msg2):\n" + ui.FormatBinary(msg2.EncSrvrChallengeABPartialkeyB[:]))
 	}); err != nil {
 		return
 	}
@@ -148,7 +147,7 @@ func authenticate() (err error) {
 		return
 	}
 
-	// Msg3: Encrypt(R_B, g^a%p, SHARED_SECRET_VALUE) -->
+	// Msg3: Encrypt(R_B, g^a%p, K_AB) -->
 	var (
 		a           uint64
 		encrypted   []byte
@@ -169,11 +168,11 @@ func authenticate() (err error) {
 		if encrypted, err = crypto.EncryptBytes(append(nonceBA[:], partialKeyABytes[:]...), sharedSecretValue); err != nil {
 			return
 		}
-		ui.Log("Generated Encrypt(R_B, g^a%p, SHARED_SECRET_VALUE) =\n" + ui.FormatBinary(encrypted))
+		ui.Log("Generated Encrypt(R_B, g^a%p, K_AB) =\n" + ui.FormatBinary(encrypted))
 
 		msg3 := crypto.AuthenticationPayloadResponseAB{EncChallengeBAPartialKeyA: encrypted}
 
-		ui.LogO("Sent Encrypt(R_B, g^a%p, SHARED_SECRET_VALUE) (msg3):\n" + ui.FormatBinary(msg3.EncChallengeBAPartialKeyA[:]))
+		ui.LogO("Sent Encrypt(R_B, g^a%p, K_AB) (msg3):\n" + ui.FormatBinary(msg3.EncChallengeBAPartialKeyA[:]))
 		ui.DisplayMessageStatus("Waiting for server to read Msg3...")
 		if err = remote.WriteMessageStruct(conn, msg3); err != nil {
 			return
@@ -191,11 +190,11 @@ func authenticate() (err error) {
 }
 
 func handleDisconnect() {
-	if err := conn.Close(); err != nil {
-		ui.LogE(err)
+	if conn != nil {
+		conn.Close()
 	}
+	ui.Log("Disconnected")
 	ui.DisplayMessageStatus("Disconnected")
-	isConnected = false
 	connectBtn.Enable()
 	ipAddressField.SetReadOnly(false)
 	portField.SetReadOnly(false)
@@ -204,50 +203,71 @@ func handleDisconnect() {
 
 func handleSend() {
 	var (
-		err       error
-		encrypted []byte
+		err         error
+		encrypted   []byte
+		messageSize uint64
 	)
-	if encrypted, err = crypto.EncryptMessage(inputArea.Text, sessionKey); err != nil {
+
+	if encrypted, err = crypto.EncryptBytes([]byte(inputArea.Text), sessionKey); err != nil {
 		ui.LogE(err)
+		handleDisconnect()
 		return
 	}
-	encrypted = append(encrypted, []byte("\n")...)
-	ui.Log("Sent encrypted text: " + ui.FormatBinary(encrypted))
+
+	messageSize = uint64(len(encrypted))
+	messageSizeBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(messageSizeBytes, messageSize)
+	encrypted = append(messageSizeBytes, encrypted...)
+	ui.LogO("Sent E(len, message, K_session): " + ui.FormatBinary(encrypted))
+
 	if _, err := conn.Write(encrypted); err != nil {
 		ui.LogE(err)
+		handleDisconnect()
 	}
 }
 
 func recvLoop() {
 	var (
 		err       error
-		encrypted []byte
+		decrypted []byte
 		message   string
 		reader    *bufio.Reader
 	)
 	for {
 		time.Sleep(1000 * time.Millisecond)
-		if !isConnected {
-			fmt.Println("Not connected..")
-			return
-		}
 		if conn == nil {
 			continue
 		}
 		if reader = bufio.NewReader(conn); reader == nil {
 			continue
 		}
-		// TODO: we probably don't want to delimit on newlines
-		if encrypted, err = reader.ReadBytes('\n'); err != nil {
+
+		messageSizeBytes := make([]byte, 8)
+		if _, err := io.ReadFull(reader, messageSizeBytes); err != nil {
 			ui.LogE(err)
-			continue
+			handleDisconnect()
+			return
 		}
-		ui.Log("Received encrypted text: " + ui.FormatBinary(encrypted))
-		encrypted = encrypted[:len(encrypted)-1]
-		if message, err = crypto.DecryptMessage(encrypted, sessionKey); err != nil {
+
+		messageSize := binary.LittleEndian.Uint64(messageSizeBytes[:])
+		ui.LogI("Received message of length: " + strconv.FormatUint(messageSize, 10))
+
+		encrypted := make([]byte, messageSize)
+		if _, err := io.ReadFull(reader, encrypted); err != nil {
 			ui.LogE(err)
-			continue
+			handleDisconnect()
+			return
 		}
+
+		ui.LogI("Received encrypted text: " + ui.FormatBinary(encrypted))
+		if decrypted, err = crypto.DecryptBytes(encrypted, sessionKey); err != nil {
+			ui.LogE(err)
+			handleDisconnect()
+			return
+		}
+
+		message = string(decrypted)
+		ui.Log("Decrypted message: " + message)
 		outputArea.SetText(outputArea.Text + "\n" + message)
 	}
 }
