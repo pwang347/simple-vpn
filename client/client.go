@@ -40,6 +40,8 @@ func handleConnect() {
 	connectBtn.Disable()
 	ipAddressField.SetReadOnly(true)
 	portField.SetReadOnly(true)
+	secretField.SetReadOnly(true)
+	ui.Log("Initialized connection to " + ipAddressField.Text + " on port " + portField.Text + " using secret " + sharedSecretValue)
 	ui.DisplayMessageStatus(fmt.Sprintf("Waiting for a connection with %s on port %s...", ipAddressField.Text, portField.Text))
 
 	// TODO: form validation
@@ -51,6 +53,7 @@ func handleConnect() {
 
 	ui.Log("Connection accepted by " + conn.RemoteAddr().String())
 	ui.DisplayMessageStatus("Established connection to server")
+	disconnectBtn.Enable()
 
 	if err = authenticate(); err != nil {
 		ui.LogE(err)
@@ -62,7 +65,6 @@ func handleConnect() {
 	inputArea.SetReadOnly(false)
 	inputArea.SetPlaceHolder("")
 	inputBtn.Enable()
-	disconnectBtn.Enable()
 
 	go recvLoop()
 }
@@ -196,6 +198,7 @@ func handleDisconnect() {
 	connectBtn.Enable()
 	ipAddressField.SetReadOnly(false)
 	portField.SetReadOnly(false)
+	secretField.SetReadOnly(false)
 	disconnectBtn.Disable()
 }
 

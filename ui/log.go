@@ -43,27 +43,36 @@ func SentenceWrap(s string, limit int, wordLimit int) string {
 	}
 
 	words := strings.Fields(s)
-	if len(words) <= limit {
+	if len(words) == 1 {
 		return WordWrap(s, wordLimit)
 	}
 
 	currentLen := 0
-	wordWrapCounter := 0
 	var strBuilder strings.Builder
 	var rowStrBuilder strings.Builder
 	for _, word := range words {
-		currentLen += len(word)
 		if rowStrBuilder.Len() > 0 {
 			rowStrBuilder.WriteString(" ")
 		}
-		rowStrBuilder.WriteString(word)
-		if wordWrapCounter != 0 && wordWrapCounter%limit == 0 || currentLen > wordLimit {
+		if len(word) > wordLimit {
+			word = WordWrap(word, wordLimit)
+			wordSegments := strings.Split(word, "\n")
+			lastWord := wordSegments[len(wordSegments)-1]
+			strBuilder.WriteString(rowStrBuilder.String())
+			strBuilder.WriteString("\n")
+			rowStrBuilder.Reset()
+			strBuilder.WriteString(word)
+			currentLen = len(lastWord)
+		} else {
+			currentLen += len(word)
+			rowStrBuilder.WriteString(word)
+		}
+		if currentLen > wordLimit {
 			strBuilder.WriteString(rowStrBuilder.String())
 			strBuilder.WriteString("\n")
 			rowStrBuilder.Reset()
 			currentLen = 0
 		}
-		wordWrapCounter++
 	}
 	strBuilder.WriteString(rowStrBuilder.String())
 	return strBuilder.String()
