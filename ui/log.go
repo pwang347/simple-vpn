@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,9 +20,7 @@ const (
 	// WrapWordLength is number of characters in a line
 	WrapWordLength = 40
 
-	// BinaryMaxLength is max characters to show for a binary string before truncation
-	BinaryMaxLength = 40
-
+	// MaxLogEntries is the max number of log entries
 	MaxLogEntries = 30
 )
 
@@ -31,15 +28,6 @@ var (
 	content     *widget.Box
 	statusLabel *widget.Label
 )
-
-// FormatBinary returns formatted text for a byte array
-func FormatBinary(b []byte) (result string) {
-	result = fmt.Sprintf("% x", b)
-	if len(result) > BinaryMaxLength {
-		result = result[:BinaryMaxLength] + "..."
-	}
-	return
-}
 
 // WordWrap wraps a single string by a length
 func WordWrap(s string, limit int) string {

@@ -94,48 +94,46 @@ func authenticate() (err error) {
 		}
 
 		nonceAB = msg1.ChallengeAB
-		ui.LogI("Received R_A (msg1):\n" + ui.FormatBinary(nonceAB[:]))
+		ui.LogI("Received R_A (msg1):\n" + fmt.Sprintf("%x", nonceAB[:]))
 	}); err != nil {
 		return
 	}
 
 	// Msg2: (R_B, Encrypt(SRVR, R_A, g^b%p, K_AB)) -->
 	var (
-		b            uint64
+		b            []byte
 		nonceBA      []byte
 		encrypted    []byte
-		partialKeyB  uint64
+		partialKeyB  []byte
 		decryptedMsg crypto.DecodedChallengePartialKey
 	)
 
 	ui.Step(func() {
 		nonceBA = crypto.NewChallenge(crypto.DefaultNonceLength)
-		ui.Log("Generated R_B =\n" + ui.FormatBinary(nonceBA))
+		ui.Log("Generated R_B =\n" + fmt.Sprintf("%x", nonceBA))
 	})
 
 	if ui.Step(func() {
 		b = crypto.GenerateRandomExponent()
-		ui.Log("Generated b =\n" + fmt.Sprintf("%d", (b)))
+		ui.Log("Generated b =\n" + crypto.BytesToBigNumString(b))
 
 		partialKeyB = crypto.GeneratePartialKey(b)
-		ui.Log("Generated g^b%p =\n" + fmt.Sprintf("%d", partialKeyB))
+		ui.Log("Generated g^b%p =\n" + crypto.BytesToBigNumString(partialKeyB))
 	}); err != nil {
 		return
 	}
 
 	if ui.Step(func() {
-		partialKeyBBytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(partialKeyBBytes, partialKeyB)
-		if encrypted, err = crypto.EncryptBytes(append([]byte("SRVR"), append(nonceAB[:], partialKeyBBytes[:]...)...), sharedSecretValue); err != nil {
+		if encrypted, err = crypto.EncryptBytes(append([]byte("SRVR"), append(nonceAB[:], partialKeyB[:]...)...), sharedSecretValue); err != nil {
 			return
 		}
-		ui.Log("Generated Encrypt(SRVR, R_A, g^b%p, K_AB)) =\n" + ui.FormatBinary(encrypted))
+		ui.Log("Generated Encrypt(SRVR, R_A, g^b%p, K_AB)) =\n" + fmt.Sprintf("%x", encrypted))
 
 		msg2 := crypto.AuthenticationPayloadResponseBA{EncSrvrChallengeABPartialkeyB: encrypted}
 		copy(msg2.ChallengeBA[:], nonceBA[:])
 
-		ui.LogO("Sent R_A (msg2):\n" + ui.FormatBinary(nonceBA[:]))
-		ui.LogO("Sent Encrypt(SRVR, R_A, g^b%p, K_AB)) (msg2):\n" + ui.FormatBinary(msg2.EncSrvrChallengeABPartialkeyB[:]))
+		ui.LogO("Sent R_A (msg2):\n" + fmt.Sprintf("%x", nonceBA[:]))
+		ui.LogO("Sent Encrypt(SRVR, R_A, g^b%p, K_AB)) (msg2):\n" + fmt.Sprintf("%x", msg2.EncSrvrChallengeABPartialkeyB[:]))
 		ui.DisplayMessageStatus("Waiting for client to read Msg2...")
 		if err = remote.WriteMessageStruct(conn, msg2); err != nil {
 			return
@@ -147,7 +145,7 @@ func authenticate() (err error) {
 	// Msg3: <-- (Encrypt(R_B, g^a%p, K_AB))
 	var (
 		msg3        crypto.AuthenticationPayloadResponseAB
-		partialKeyA uint64
+		partialKeyA []byte
 	)
 
 	if ui.Step(func() {
@@ -159,7 +157,7 @@ func authenticate() (err error) {
 			err = errors.New("Could not parse Msg3")
 			return
 		}
-		ui.LogI("Received Encrypt(R_B, g^a%p, K_AB) (msg3):\n" + ui.FormatBinary(msg3.EncChallengeBAPartialKeyA[:]))
+		ui.LogI("Received Encrypt(R_B, g^a%p, K_AB) (msg3):\n" + fmt.Sprintf("%x", msg3.EncChallengeBAPartialKeyA[:]))
 	}); err != nil {
 		return
 	}
@@ -174,9 +172,9 @@ func authenticate() (err error) {
 			return
 		}
 
-		partialKeyA = binary.LittleEndian.Uint64(decryptedMsg.PartialKey[:])
-		ui.Log("Decrypted Challenge (msg2):\n" + ui.FormatBinary(decryptedMsg.Challenge[:]))
-		ui.Log("Decrypted PartialKey (msg2):\n" + fmt.Sprintf("%d", partialKeyA))
+		partialKeyA = decryptedMsg.PartialKey[:]
+		ui.Log("Decrypted Challenge (msg2):\n" + fmt.Sprintf("%x", decryptedMsg.Challenge[:]))
+		ui.Log("Decrypted PartialKey (msg2):\n" + crypto.BytesToBigNumString(partialKeyA))
 	}); err != nil {
 		return
 	}
@@ -192,7 +190,7 @@ func authenticate() (err error) {
 
 	ui.Step(func() {
 		key := crypto.ConstructKey(partialKeyA, b)
-		sessionKey = strconv.FormatUint(key, 10)
+		sessionKey = crypto.BytesToBigNumString(key)
 		ui.LogS("Established Session key:\n" + sessionKey)
 	})
 	return
@@ -226,7 +224,7 @@ func handleSend() {
 	messageSizeBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(messageSizeBytes, messageSize)
 	encrypted = append(messageSizeBytes, encrypted...)
-	ui.LogO("Sent E(len, message, K_session): " + ui.FormatBinary(encrypted))
+	ui.LogO("Sent E(len, message, K_session): " + fmt.Sprintf("%x", encrypted))
 
 	if _, err := conn.Write(encrypted); err != nil {
 		ui.LogE(err)
@@ -267,7 +265,7 @@ func recvLoop() {
 			return
 		}
 
-		ui.LogI("Received encrypted text: " + ui.FormatBinary(encrypted))
+		ui.LogI("Received encrypted text: " + fmt.Sprintf("%x", encrypted))
 		if decrypted, err = crypto.DecryptBytes(encrypted, sessionKey); err != nil {
 			ui.LogE(err)
 			handleDisconnect()
