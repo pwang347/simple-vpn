@@ -225,6 +225,8 @@ func handleSend() {
 		ui.LogE(err)
 		handleDisconnect()
 	}
+
+	inputArea.SetText("")
 }
 
 func recvLoop() {

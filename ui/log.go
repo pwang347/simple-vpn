@@ -27,6 +27,7 @@ const (
 var (
 	content     *widget.Box
 	statusLabel *widget.Label
+	numLogItems = 0
 )
 
 // WordWrap wraps a single string by a length
@@ -94,54 +95,44 @@ func StringWrap(s string, sentenceLimit int, wordLimit int) string {
 	return strBuilder.String()
 }
 
-// Log appends a new info log item to the log content
-func Log(text string) {
-	wrappedText := StringWrap(text, WrapNumWords, WrapWordLength)
-	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)),
-		widget.NewIcon(theme.InfoIcon())), NewMultiLineEntry(wrappedText, "", true)))
+func log(text string, icon *widget.Icon) {
+	numLogItems++
+	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(
+		layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)), icon),
+		widget.NewVBox(NewBoldedLabel("Event #"+strconv.Itoa(numLogItems)), NewMultiLineEntry(text, "", true))))
 	if len(content.Children) > MaxLogEntries {
 		content.Children = content.Children[:len(content.Children)-1]
 	}
+}
+
+// Log appends a new info log item to the log content
+func Log(text string) {
+	wrappedText := StringWrap(text, WrapNumWords, WrapWordLength)
+	log(wrappedText, widget.NewIcon(theme.InfoIcon()))
 }
 
 // LogE appends a new error log item to the log content
 func LogE(err error) {
 	wrappedText := StringWrap("EXCEPTION:\n"+err.Error(), WrapNumWords, WrapWordLength)
-	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)),
-		widget.NewIcon(theme.WarningIcon())), NewMultiLineEntry(wrappedText, "", true)))
-	if len(content.Children) > MaxLogEntries {
-		content.Children = content.Children[:len(content.Children)-1]
-	}
+	log(wrappedText, widget.NewIcon(theme.WarningIcon()))
 }
 
 // LogO appends a new info outbound item to the log content
 func LogO(text string) {
 	wrappedText := StringWrap(text, WrapNumWords, WrapWordLength)
-	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)),
-		widget.NewIcon(theme.NavigateNextIcon())), NewMultiLineEntry(wrappedText, "", true)))
-	if len(content.Children) > MaxLogEntries {
-		content.Children = content.Children[:len(content.Children)-1]
-	}
+	log(wrappedText, widget.NewIcon(theme.NavigateNextIcon()))
 }
 
 // LogI appends a new info inbound log item to the log content
 func LogI(text string) {
 	wrappedText := StringWrap(text, WrapNumWords, WrapWordLength)
-	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)),
-		widget.NewIcon(theme.NavigateBackIcon())), NewMultiLineEntry(wrappedText, "", true)))
-	if len(content.Children) > MaxLogEntries {
-		content.Children = content.Children[:len(content.Children)-1]
-	}
+	log(wrappedText, widget.NewIcon(theme.NavigateBackIcon()))
 }
 
 // LogS appends a new success log item to the log content
 func LogS(text string) {
 	wrappedText := StringWrap(text, WrapNumWords, WrapWordLength)
-	content.Prepend(widget.NewHBox(fyne.NewContainerWithLayout(layout.NewFixedGridLayout(fyne.NewSize(iconSize, iconSize)),
-		widget.NewIcon(theme.ConfirmIcon())), NewMultiLineEntry(wrappedText, "", true)))
-	if len(content.Children) > MaxLogEntries {
-		content.Children = content.Children[:len(content.Children)-1]
-	}
+	log(wrappedText, widget.NewIcon(theme.ConfirmIcon()))
 }
 
 // NewScrollingLogContainer creates a new scrolling log container
