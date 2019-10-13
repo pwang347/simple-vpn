@@ -44,9 +44,6 @@ func Step(proc func()) {
 	pause()
 	continueBtn.Disable()
 	proc()
-	if stepEnabled {
-		continueBtn.Enable()
-	}
 }
 
 // SetStepMode sets the current stepping mode

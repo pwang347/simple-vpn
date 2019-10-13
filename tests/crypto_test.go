@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Gordon-Yeh/simple-vpn/crypto"
+	"github.com/pwang347/simple-vpn/crypto"
 )
 
 // TestEncryptDecrypt tests that encrypt / decrypt is working as intended

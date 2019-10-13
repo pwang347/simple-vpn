@@ -6,10 +6,10 @@ import (
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/theme"
 	"fyne.io/fyne/widget"
-	"github.com/Gordon-Yeh/simple-vpn/client"
-	"github.com/Gordon-Yeh/simple-vpn/crypto"
-	"github.com/Gordon-Yeh/simple-vpn/icon"
-	"github.com/Gordon-Yeh/simple-vpn/server"
+	"github.com/pwang347/simple-vpn/client"
+	"github.com/pwang347/simple-vpn/crypto"
+	"github.com/pwang347/simple-vpn/icon"
+	"github.com/pwang347/simple-vpn/server"
 )
 
 func main() {

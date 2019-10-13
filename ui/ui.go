@@ -20,11 +20,18 @@ func NewButton(label string, handler func(), isDisabled bool) (btn *widget.Butto
 }
 
 // NewEntry creates a new entry
-func NewEntry(text string, placeholder string, isReadOnly bool) (entry *widget.Entry) {
+func NewEntry(text string, placeholder string, isReadOnly bool, limit int) (entry *widget.Entry) {
 	entry = widget.NewEntry()
 	entry.SetText(text)
 	entry.SetPlaceHolder(placeholder)
 	entry.SetReadOnly(isReadOnly)
+	if limit > 0 {
+		entry.OnChanged = func(s string) {
+			if len(s) > limit {
+				entry.SetText(s[:limit+1])
+			}
+		}
+	}
 	return
 }
 

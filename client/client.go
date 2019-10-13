@@ -9,14 +9,16 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/widget"
-	"github.com/Gordon-Yeh/simple-vpn/crypto"
-	"github.com/Gordon-Yeh/simple-vpn/remote"
-	"github.com/Gordon-Yeh/simple-vpn/ui"
+	"github.com/pwang347/simple-vpn/crypto"
+	"github.com/pwang347/simple-vpn/remote"
+	"github.com/pwang347/simple-vpn/ui"
 )
 
 var (
@@ -32,9 +34,9 @@ var (
 	outputArea           *widget.Entry
 	continueBtn          *widget.Button
 	nonce                int
-	sharedSecretValue    string
 	sessionKey           string
-	isConnected          = false
+	window               fyne.Window
+	mutex                sync.Mutex
 )
 
 func handleConnect() {
@@ -53,7 +55,6 @@ func handleConnect() {
 		return
 	}
 
-	isConnected = true
 	ui.Log("Connection accepted by " + conn.RemoteAddr().String())
 	disconnectBtn.Enable()
 
@@ -74,15 +75,16 @@ func handleDisconnect() {
 	if conn != nil {
 		conn.Close()
 	}
-	if isConnected {
+	mutex.Lock()
+	if !disconnectBtn.Disabled() {
 		ui.Log("Disconnected")
-		isConnected = false
+		disconnectBtn.Disable()
 	}
+	mutex.Unlock()
 	connectBtn.Enable()
 	ipAddressField.SetReadOnly(false)
 	portField.SetReadOnly(false)
 	secretField.SetReadOnly(false)
-	disconnectBtn.Disable()
 
 	inputArea.SetReadOnly(true)
 	inputArea.SetPlaceHolder(inputAreaPlaceholder)
@@ -93,7 +95,7 @@ func handleDisconnect() {
 func authenticate() (err error) {
 
 	ui.Step(func() {
-		ui.Log("Starting authentication using secret " + sharedSecretValue)
+		ui.Log("Starting authentication using secret " + secretField.Text)
 	})
 
 	// Msg1: (R_A) -->
@@ -143,7 +145,7 @@ func authenticate() (err error) {
 
 	if ui.Step(func() {
 		nonceBA = msg2.ChallengeBA
-		if decrypted, err = crypto.DecryptBytes(msg2.EncSrvrChallengeABPartialkeyB[:], sharedSecretValue); err != nil {
+		if decrypted, err = crypto.DecryptBytes(msg2.EncSrvrChallengeABPartialkeyB[:], secretField.Text); err != nil {
 			return
 		}
 
@@ -185,7 +187,7 @@ func authenticate() (err error) {
 	})
 
 	if ui.Step(func() {
-		if encrypted, err = crypto.EncryptBytes(append(nonceBA[:], partialKeyA[:]...), sharedSecretValue); err != nil {
+		if encrypted, err = crypto.EncryptBytes(append(nonceBA[:], partialKeyA[:]...), secretField.Text); err != nil {
 			return
 		}
 		ui.Log("Generated Encrypt(R_B, g^a%p, K_AB) =\n" + fmt.Sprintf("%x", encrypted))
@@ -215,6 +217,10 @@ func handleSend() {
 		encrypted   []byte
 		messageSize uint64
 	)
+
+	if strings.TrimSpace(inputArea.Text) == "" {
+		return
+	}
 
 	if encrypted, err = crypto.EncryptBytes([]byte(inputArea.Text), sessionKey); err != nil {
 		ui.LogE(err)
@@ -278,7 +284,8 @@ func recvLoop() {
 
 		message = string(decrypted)
 		ui.Log("Decrypted message: " + message)
-		outputArea.SetText(ui.StringWrap(message+"\n\n"+outputArea.Text, ui.WrapNumWords, ui.WrapWordLength))
+		outputArea.SetText(ui.StringWrap(message+"\n"+outputArea.Text, ui.WrapWordLength))
+		window.Resize(window.Canvas().Size())
 	}
 }
 
@@ -286,23 +293,20 @@ func recvLoop() {
 func Start(w fyne.Window, app fyne.App) {
 
 	w.Resize(fyne.NewSize(960, 440))
+	window = w
 
-	ipAddressField = ui.NewEntry(remote.DefaultIPAddress, "", false)
-	portField = ui.NewEntry(remote.DefaultPort, "", false)
+	ipAddressField = ui.NewEntry(remote.DefaultIPAddress, "", false, 42)
+	portField = ui.NewEntry(remote.DefaultPort, "", false, 42)
 
-	secretField = ui.NewEntry("", "Shared Secret Value", false)
-	secretField.OnChanged = func(newStr string) {
-		sharedSecretValue = newStr
-	}
+	secretField = ui.NewEntry("", "Shared Secret Value", false, 42)
 
 	connectBtn = widget.NewButton("Connect", handleConnect)
 	disconnectBtn = ui.NewButton("Disconnect", handleDisconnect, true)
 
-	inputArea = ui.NewMultiLineEntry("", inputAreaPlaceholder, true)
+	inputArea = ui.NewEntry("", inputAreaPlaceholder, true, 62)
 	inputBtn = ui.NewButton("Send", handleSend, true)
 
 	outputArea = ui.NewMultiLineEntry("", "", true)
-	// outputArea = ui.NewMultiLineEntry("first line"+"\n"+"second line"+"\n"+"third line"+"\n"+"fourth line"+"\n"+"fifth line"+"\n"+"six line"+"\n", "", true)
 	continueBtn = ui.NewStepperButton("Step")
 
 	form := widget.NewForm()
