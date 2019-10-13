@@ -20,19 +20,20 @@ import (
 )
 
 var (
-	conn              net.Conn
-	portField         *widget.Entry
-	secretField       *widget.Entry
-	serveBtn          *widget.Button
-	disconnectBtn     *widget.Button
-	inputArea         *widget.Entry
-	inputBtn          *widget.Button
-	outputArea        *widget.Entry
-	continueBtn       *widget.Button
-	nonce             int
-	sharedSecretValue string
-	sessionKey        string
-	isConnected       = false
+	conn                 net.Conn
+	portField            *widget.Entry
+	secretField          *widget.Entry
+	serveBtn             *widget.Button
+	disconnectBtn        *widget.Button
+	inputArea            *widget.Entry
+	inputAreaPlaceholder = "Connection must be established first"
+	inputBtn             *widget.Button
+	outputArea           *widget.Entry
+	continueBtn          *widget.Button
+	nonce                int
+	sharedSecretValue    string
+	sessionKey           string
+	isConnected          = false
 )
 
 func handleServe() {
@@ -65,6 +66,25 @@ func handleServe() {
 	inputBtn.Enable()
 
 	go recvLoop()
+}
+
+func handleDisconnect() {
+	if conn != nil {
+		conn.Close()
+	}
+	if isConnected {
+		ui.Log("Disconnected")
+		isConnected = false
+	}
+	serveBtn.Enable()
+	portField.SetReadOnly(false)
+	secretField.SetReadOnly(false)
+	disconnectBtn.Disable()
+
+	inputArea.SetReadOnly(true)
+	inputArea.SetPlaceHolder(inputAreaPlaceholder)
+	inputBtn.Disable()
+	outputArea.SetText("")
 }
 
 func authenticate() (err error) {
@@ -191,22 +211,9 @@ func authenticate() (err error) {
 		key := crypto.ConstructKey(partialKeyA, b)
 		sessionKey = crypto.BytesToBigNumString(key)
 		ui.LogS("Established Session key:\n" + sessionKey)
+		// continueBtn.Disable()
 	})
 	return
-}
-
-func handleDisconnect() {
-	if conn != nil {
-		conn.Close()
-	}
-	if isConnected {
-		ui.Log("Disconnected")
-		isConnected = false
-	}
-	serveBtn.Enable()
-	portField.SetReadOnly(false)
-	secretField.SetReadOnly(false)
-	disconnectBtn.Disable()
 }
 
 func handleSend() {
@@ -297,10 +304,11 @@ func Start(w fyne.Window, app fyne.App) {
 	serveBtn = widget.NewButton("Serve", handleServe)
 	disconnectBtn = ui.NewButton("Disconnect", handleDisconnect, true)
 
-	inputArea = ui.NewMultiLineEntry("", "Connection must be established first", true)
+	inputArea = ui.NewMultiLineEntry("", inputAreaPlaceholder, true)
 	inputBtn = ui.NewButton("Send", handleSend, true)
 
 	outputArea = ui.NewMultiLineEntry("", "", true)
+	continueBtn = ui.NewStepperButton("Step")
 
 	form := widget.NewForm()
 	form.Append("Port", portField)
@@ -309,7 +317,7 @@ func Start(w fyne.Window, app fyne.App) {
 	headings := fyne.NewContainerWithLayout(layout.NewGridLayout(1), ui.NewBoldedLabel("Event Log"))
 	scrollLayout := fyne.NewContainerWithLayout(layout.NewBorderLayout(headings, nil, nil, nil), headings, ui.NewScrollingLogContainer())
 
-	clientLayout := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
+	uiLayout := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
 		widget.NewVBox(
 			form,
 			widget.NewHBox(layout.NewSpacer(), serveBtn, disconnectBtn),
@@ -321,12 +329,10 @@ func Start(w fyne.Window, app fyne.App) {
 			ui.NewBoldedLabel("Data as Received"),
 			outputArea,
 
-			widget.NewHBox(layout.NewSpacer(), ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false), ui.NewStepperButton("Step")),
+			widget.NewHBox(layout.NewSpacer(), ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false), continueBtn),
 		),
 		scrollLayout)
 
-	w.SetContent(clientLayout)
+	w.SetContent(uiLayout)
 	ui.Log("Initialized server")
-
-	w.SetContent(clientLayout)
 }
