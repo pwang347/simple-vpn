@@ -16,6 +16,7 @@ Install fyne CLI
 
 Then run the package tool and build the application `os=(windows, darwin, linux)`
 ```
+go build
 fyne package -os windows -icon icon/ubc.png
 go build
 ```

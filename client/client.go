@@ -303,7 +303,7 @@ func Start(w fyne.Window, app fyne.App) {
 	connectBtn = widget.NewButton("Connect", handleConnect)
 	disconnectBtn = ui.NewButton("Disconnect", handleDisconnect, true)
 
-	inputArea = ui.NewEntry("", inputAreaPlaceholder, true, 62)
+	inputArea = ui.NewEntry("", inputAreaPlaceholder, true, 51)
 	inputBtn = ui.NewButton("Send", handleSend, true)
 
 	outputArea = ui.NewMultiLineEntry("", "", true)
