@@ -285,14 +285,14 @@ func recvLoop() {
 
 		message = string(decrypted)
 		ui.Log("Decrypted message: " + message)
-		outputArea.SetText(outputArea.Text + "\n" + message)
+		outputArea.SetText(ui.StringWrap(message+"\n"+outputArea.Text, ui.WrapNumWords, ui.WrapWordLength))
 	}
 }
 
 // Start initializes the client application
 func Start(w fyne.Window, app fyne.App) {
 
-	w.Resize(fyne.NewSize(960, 400))
+	w.Resize(fyne.NewSize(960, 440))
 
 	portField = ui.NewEntry(remote.DefaultPort, "", false)
 
@@ -314,25 +314,25 @@ func Start(w fyne.Window, app fyne.App) {
 	form.Append("Port", portField)
 	form.Append("Secret", secretField)
 
-	headings := fyne.NewContainerWithLayout(layout.NewGridLayout(1), ui.NewBoldedLabel("Event Log"))
-	scrollLayout := fyne.NewContainerWithLayout(layout.NewBorderLayout(headings, nil, nil, nil), headings, ui.NewScrollingLogContainer())
+	headings := fyne.NewContainerWithLayout(layout.NewGridLayout(1),
+		widget.NewHBox(
+			ui.NewBoldedLabel("Event Log"),
+			layout.NewSpacer(),
+			ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false),
+			continueBtn))
+	rightCell := fyne.NewContainerWithLayout(layout.NewBorderLayout(headings, nil, nil, nil), headings, ui.NewScrollingLogContainer())
 
-	uiLayout := fyne.NewContainerWithLayout(layout.NewGridLayout(2),
-		widget.NewVBox(
-			form,
-			widget.NewHBox(layout.NewSpacer(), serveBtn, disconnectBtn),
+	leftTopCell := widget.NewVBox(
+		form,
+		widget.NewHBox(layout.NewSpacer(), serveBtn, disconnectBtn),
+		ui.NewBoldedLabel("Data to be Sent"),
+		inputArea,
+		widget.NewHBox(layout.NewSpacer(), inputBtn),
+		ui.NewBoldedLabel("Data as Received"))
+	leftMidCell := widget.NewScrollContainer(widget.NewVBox(outputArea))
+	leftCell := fyne.NewContainerWithLayout(layout.NewBorderLayout(leftTopCell, nil, nil, nil), leftTopCell, leftMidCell)
 
-			ui.NewBoldedLabel("Data to be Sent"),
-			inputArea,
-			widget.NewHBox(layout.NewSpacer(), inputBtn),
-
-			ui.NewBoldedLabel("Data as Received"),
-			outputArea,
-
-			widget.NewHBox(layout.NewSpacer(), ui.NewCheck("Auto", func(b bool) { ui.SetStepMode(!b) }, false), continueBtn),
-		),
-		scrollLayout)
-
+	uiLayout := fyne.NewContainerWithLayout(layout.NewGridLayout(2), leftCell, rightCell)
 	w.SetContent(uiLayout)
 	ui.Log("Initialized server")
 }

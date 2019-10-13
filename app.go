@@ -33,7 +33,6 @@ func main() {
 	)
 
 	w.SetContent(initLayout)
-	// w.SetFixedSize(true)
 	w.Resize(fyne.NewSize(640, 400))
 	w.CenterOnScreen()
 	w.ShowAndRun()
