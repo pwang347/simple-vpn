@@ -71,7 +71,7 @@ func handleConnect() {
 func authenticate() (err error) {
 
 	ui.Step(func() {
-		ui.Log("Starting client authentication using secret " + sharedSecretValue)
+		ui.Log("Starting authentication using secret " + sharedSecretValue)
 	})
 
 	// Msg1: (R_A) -->
@@ -105,6 +105,7 @@ func authenticate() (err error) {
 	)
 
 	if ui.Step(func() {
+		ui.Log("Waiting for Msg2 from server...")
 		if decodedMsg, err = remote.ReadMessageStruct(conn); err != nil {
 			return
 		}
